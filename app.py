@@ -341,3 +341,44 @@ def api():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
+
+@app.route("/internal/import", methods=["POST"])
+def import_data():
+    """One-time data import endpoint — protected by secret key"""
+    secret = request.headers.get("X-Import-Key", "")
+    import_key = os.environ.get("IMPORT_KEY", "")
+    if not import_key or secret != import_key:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    data = request.get_json(force=True)
+    db = get_db()
+
+    # Clear existing
+    db.execute("DELETE FROM payment_history")
+    db.execute("DELETE FROM members")
+    db.execute("DELETE FROM sqlite_sequence WHERE name IN ('members','payment_history')")
+    db.commit()
+
+    # Insert members
+    for m in data.get("members", []):
+        db.execute("""INSERT INTO members (id, nama, whatsapp, akun_telegram, jenis_paket,
+                      tanggal_mulai, tanggal_expired, status, harga, status_pembayaran,
+                      bulan_custom, synced) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
+                   [m["id"],m["nama"],m["whatsapp"],m["akun_telegram"],m["jenis_paket"],
+                    m["tanggal_mulai"],m["tanggal_expired"],m["status"],m["harga"],
+                    m["status_pembayaran"],m.get("bulan_custom",0),m.get("synced",1)])
+
+    # Insert payments
+    for p in data.get("payments", []):
+        db.execute("""INSERT INTO payment_history (id, member_id, jenis_paket, harga, bulan,
+                      tanggal_mulai, tanggal_expired, status_pembayaran, tipe, created_at)
+                      VALUES (?,?,?,?,?,?,?,?,?,?)""",
+                   [p["id"],p["member_id"],p["jenis_paket"],p["harga"],p["bulan"],
+                    p["tanggal_mulai"],p["tanggal_expired"],p["status_pembayaran"],
+                    p["tipe"],p.get("created_at","")])
+
+    db.commit()
+
+    total = db.execute("SELECT COUNT(*) FROM members").fetchone()[0]
+    return jsonify({"success": True, "total_members": total})

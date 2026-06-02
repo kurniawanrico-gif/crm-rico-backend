@@ -3,3 +3,4 @@ __pycache__/
 *.pyo
 .env
 crm_v5.db
+*.b64

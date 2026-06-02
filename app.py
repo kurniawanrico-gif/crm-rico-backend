@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 app = Flask(__name__)
 CORS(app)
 
-DB_PATH = os.environ.get("DB_PATH", os.path.join(os.path.dirname(os.path.abspath(__file__)), "crm_v5.db"))
+DB_PATH = os.environ.get("DB_PATH", "/data/crm_v5.db" if os.path.exists("/data") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "crm_v5.db"))
 
 PRICE_MAP = {
     "3 Bulan Rp920.000": {"harga": 920000, "bulan": 3},

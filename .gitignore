@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+crm_v5.db

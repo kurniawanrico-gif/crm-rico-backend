@@ -9,6 +9,18 @@ CORS(app)
 
 DB_PATH = os.environ.get("DB_PATH", "/data/crm_v5.db" if os.path.exists("/data") else os.path.join(os.path.dirname(os.path.abspath(__file__)), "crm_v5.db"))
 
+# Seed DB from env var on first boot
+import base64
+_seed = os.environ.get("DB_SEED_B64", "")
+if _seed and not os.path.exists(DB_PATH):
+    try:
+        os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+        with open(DB_PATH, 'wb') as _f:
+            _f.write(base64.b64decode(_seed))
+        print(f"DB seeded from env var: {os.path.getsize(DB_PATH)} bytes")
+    except Exception as _e:
+        print(f"DB seed failed: {_e}")
+
 PRICE_MAP = {
     "3 Bulan Rp920.000": {"harga": 920000, "bulan": 3},
     "6 Bulan Rp1.650.000": {"harga": 1650000, "bulan": 6},

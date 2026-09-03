@@ -2,6 +2,7 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import json, os, sqlite3
+import hmac
 from datetime import datetime, timedelta
 
 app = Flask(__name__)
@@ -337,6 +338,72 @@ def api():
     else:
         count = db.execute("SELECT COUNT(*) FROM members").fetchone()[0]
         return jsonify({"status": "ok", "total_members": count})
+
+@app.route("/internal/reporting/daily", methods=["GET"])
+def reporting_daily():
+    reporting_key = request.headers.get("X-Reporting-Key", "")
+    expected_key = os.environ.get("REPORTING_API_KEY", "")
+
+    if not expected_key or not hmac.compare_digest(reporting_key, expected_key):
+        return jsonify({"error": "Unauthorized"}), 401
+
+    db = get_db()
+    try:
+        active_members = db.execute(
+            "SELECT COUNT(*) FROM members WHERE status = 'Aktif'"
+        ).fetchone()[0]
+
+        total_members = db.execute(
+            "SELECT COUNT(*) FROM members"
+        ).fetchone()[0]
+
+        stopped_members = db.execute(
+            "SELECT COUNT(*) FROM members WHERE status = 'Berhenti Berlangganan'"
+        ).fetchone()[0]
+
+        total_revenue = db.execute(
+            "SELECT COALESCE(SUM(harga), 0) FROM payment_history "
+            "WHERE status_pembayaran = 'Lunas'"
+        ).fetchone()[0]
+
+        outstanding = db.execute(
+            "SELECT COALESCE(SUM(harga), 0) FROM payment_history "
+            "WHERE status_pembayaran = 'Belum Lunas'"
+        ).fetchone()[0]
+
+        renewals_total = db.execute(
+            "SELECT COUNT(*) FROM payment_history WHERE tipe = 'perpanjang'"
+        ).fetchone()[0]
+
+        active_by_package = db.execute(
+            """
+            SELECT jenis_paket, COUNT(*) AS member_count,
+                   COALESCE(SUM(harga), 0) AS member_value
+            FROM members
+            WHERE status = 'Aktif'
+            GROUP BY jenis_paket
+            ORDER BY jenis_paket
+            """
+        ).fetchall()
+
+        return jsonify({
+            "active_members": active_members,
+            "total_members": total_members,
+            "stopped_members": stopped_members,
+            "total_revenue": total_revenue,
+            "outstanding": outstanding,
+            "renewals_total": renewals_total,
+            "active_by_package": [
+                {
+                    "jenis_paket": row[0],
+                    "member_count": row[1],
+                    "member_value": row[2],
+                }
+                for row in active_by_package
+            ],
+        })
+    finally:
+        db.close()
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
